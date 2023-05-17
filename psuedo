@@ -1,0 +1,89 @@
+# Pseudocode for the MIPS assembly program
+
+# Define data structures
+dictionary: array of structures (code, word)
+compressed_data: array to store compressed binary codes
+
+# Define variables
+dictionary_size: number of entries in the dictionary
+compression_ratio: ratio of uncompressed to compressed file size
+
+# Load dictionary from file
+load_dictionary:
+    # Ask user for the path of dictionary.txt
+    # Read the path from user input
+
+    # Open the file for reading
+    # Read the dictionary entries from the file into the dictionary array
+    # Update the dictionary_size variable
+
+# Compress the file
+compress_file:
+    # Ask user for the path of the file to be compressed
+    # Read the path from user input
+
+    # Open the file for reading
+    # Read the file character by character
+    # For each character:
+        # Search for the character in the dictionary array
+        # If found, append the corresponding code to the compressed_data array
+        # If not found, append the character to the dictionary array with a new code
+        # Append the new code to the compressed_data array
+
+    # Compute the compression ratio
+    # Calculate uncompressed file size
+    # Calculate compressed file size
+    # Divide uncompressed file size by compressed file size to get compression ratio
+
+    # Write the compressed_data array to the compressed file
+
+    # Update the dictionary in the dictionary file with new entries
+
+# Decompress the file
+decompress_file:
+    # Ask user for the path of the file to be decompressed
+    # Read the path from user input
+
+    # Open the file for reading
+    # Read the file binary codes from the file into the compressed_data array
+
+    # For each code in the compressed_data array:
+        # Search for the code in the dictionary array
+        # If found, append the corresponding word to the uncompressed file
+        # If not found, display an appropriate error message
+
+# Save changes to the dictionary
+save_dictionary:
+    # Open the dictionary file for writing
+    # Write the dictionary entries from the dictionary array to the file
+    # Close the file
+
+# Main program loop
+main_loop:
+    # Display program menu options to the user
+    # Get user input for the chosen option
+    
+    # If option is "load dictionary"
+        # Call load_dictionary function
+    
+    # If option is "compress"
+        # Call compress_file function
+
+    # If option is "decompress"
+        # Call decompress_file function
+
+    # If option is "quit"
+        # Break the loop and exit the program
+
+    # If option is invalid
+        # Display appropriate error message
+
+    # Go back to the main loop
+
+# Entry point of the program
+main:
+    # Initialize data structures and variables
+    
+    # Call the main_loop function
+
+# End of program
