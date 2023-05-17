@@ -16,7 +16,7 @@ prompt_file_exists: .asciiz "\ndoes the dictionary.txt file exist ? [yes/no]\n> 
 prompt_file_path: .asciiz "\nEnter the file path: \n> "
 prompt_creating_file: .asciiz "\nOk, creating the file..."
 prompt_quitting: .asciiz "\nQuitting..."
-prompt_error_reading_file: .asciiz "\nError reading file"
+prompt_error_reading_file: .asciiz "\nError reading file, error code: "
 prompt_error_fixing_file_path: .asciiz "\nError fixing file path"
 
 prompt_closing_files: .asciiz "\nClosing files..."
@@ -120,7 +120,7 @@ read_file:
     la $t1, words_array       # Load array address into $t1
     lw $t2, words_count       # Load words_count into $t2
 
-    lw $a0, dictionary_read_file_descriptor # load file descriptor into $a0
+    lh $a0, dictionary_read_file_descriptor # load file descriptor into $a0
 
 read_file_loop:
     li $v0, 14                      # Read from file
@@ -130,11 +130,20 @@ read_file_loop:
 
     # check if v0 is negative then print prompt_error_reading_file else branch to no_error_reading_file
     li $t3, 0
-    bge		$v0, $t3, no_error_reading_file	# if $v0 >= 0 then no_error_reading_file
+    bgt		$v0, $t3, no_error_reading_file	# if $v0 >= 0 then no_error_reading_file
+
+error_occurred_reading_file:
+    # move error code to $t7
+    move $t7, $v0
 
     # Print: Error reading file
     li $v0, 4 # print string syscall
     la $a0, prompt_error_reading_file # address of the string on a0
+    syscall
+
+    # Print: error code
+    li $v0, 1 # print integer syscall
+    move $a0, $t7 # address of the string on a0
     syscall
     
     j quit
@@ -142,12 +151,8 @@ read_file_loop:
 no_error_reading_file:
     beqz $v0, exit_read_file_loop       # Exit loop if end-of-file is reached
     
-    sw $t0, 0($t1)               # Store the line address in the array
-    addi $t1, $t1, 4         # Increment the array pointer
-    addi $t2, $t2, 1          # Increment words_count
-    
-    li $v0, 4                 # Print the line
-    move $a0, $t0             # Line address into $a0
+    li $v0, 4                 # Print the block of text
+    move $a0, $t0             # block address into $a0
     syscall
     
     la $t0, buffer            # Reset the buffer address
