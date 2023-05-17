@@ -1,6 +1,10 @@
-.data
+# similar to define in c
+.eqv BUFFER_SIZE 256
+.eqv BUFFER_SIZE_MINUS_ONE 255
 
-buffer: .space 256    # Space to store long input strings
+.data
+small_buffer: .space 32    # Space to buffer small strings
+buffer: .space BUFFER_SIZE    # Space to store long input strings
 words_array: .space 2048 # Space to store the words
 words_count: .word 0 # number of words in the dictionary
 
@@ -31,13 +35,13 @@ main:
 
     # Read the answer
     li $v0, 8 # read string syscall
-    la $a0, buffer # address of the string on a0
+    la $a0, small_buffer # address of the string on a0
     li $a1, 4 # max length of the string
     syscall
 
     # Check if the answer is yes
     li $t0, 'y'
-    lb $t1, buffer
+    lb $t1, small_buffer
     beq $t0, $t1, yes
 
     # create the file
@@ -66,26 +70,26 @@ yes:
     # Read the file path
     li $v0, 8 # read string syscall
     la $a0, buffer # address of the string on a0
-    li $a1, 128 # max length of the string
+    li $a1, BUFFER_SIZE_MINUS_ONE # max length of the string
     syscall
 
     # Remove newline character from the path
     la $t0, buffer              # Load path address into $t0
-    addi $t1, $t0, 255       # Point $t1 to the last character
+    move $t1, $t0               # Point $t1 to the first character
+
+    li $t4, '\n'
     
 find_length:
     lbu $t2, ($t1)        # Load the character
     
     # Check if it's a new line character
-    li $t4, '\n'
     beq $t2, $t4, remove_newline
     
-    addi $t1, $t1, -1    # Decrement pointer
+    addi $t1, $t1, 1    # Increment pointer
     j find_length
 
 remove_newline:
-    beqz $t1, open_file    # If the pointer reached the start, open the file
-    
+   
     sb $zero, ($t1)       # Replace newline with null character
 
     j open_file
@@ -119,9 +123,9 @@ read_file:
     lw $a0, dictionary_read_file_descriptor # load file descriptor into $a0
 
 read_file_loop:
-    li $v0, 14                # Read from file
-    move $a1, $t0             # Buffer address into $a1
-    li $a2, 32               # Maximum number of characters to read
+    li $v0, 14                      # Read from file
+    move $a1, $t0                   # Buffer address into $a1
+    li $a2, BUFFER_SIZE_MINUS_ONE   # Maximum number of characters to read
     syscall
 
     # check if v0 is negative then print prompt_error_reading_file else branch to no_error_reading_file
