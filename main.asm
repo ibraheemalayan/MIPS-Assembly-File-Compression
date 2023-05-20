@@ -19,7 +19,7 @@
 .eqv BUFFER_SIZE 2048 
 .eqv BUFFER_SIZE_MINUS_ONE 2047
 .eqv SEPARATOR '~' # unit separator
-# buffer size was set to a big number in order to read the file once, instead of chuncks, to avoid reading half of a word in a chunk and another half in the next chunk
+# mainBuffer size was set to a big number in order to read the file once, instead of chuncks, to avoid reading half of a word in a chunk and another half in the next chunk
 
 # #############################################################################
 # ################################# VARIABLES #################################
@@ -28,10 +28,13 @@
 .data
 smallBuffer: .space 32    # Space to buffer small strings
 wordsCount: .word 0 # number of words in the dictionary
-dictionaryReadFileDescriptor: .space 2 # descriptor is 2 bytes long
-dictionaryWriteFileDescriptor: .space 2 # descriptor is 2 bytes long
-buffer: .space BUFFER_SIZE    # Space to store long input strings
+inputFileDescriptor: .space 2 # descriptor is 2 bytes long ( half word )
+outputFileDescriptor: .space 2 # descriptor is 2 bytes long ( half word )
+dictionaryReadFileDescriptor: .space 2 # descriptor is 2 bytes long ( half word )
+dictionaryWriteFileDescriptor: .space 2 # descriptor is 2 bytes long ( half word )
+mainBuffer: .space BUFFER_SIZE    # Space to store long input strings
 wordsArray: .space BUFFER_SIZE # Space to store the words ( dictionary ) as SEPARATOR separated strings
+secondaryBuffer: .space BUFFER_SIZE    # Space to store temporary data
 
 # #############################################################################
 # ################################## PROMPTS ##################################
@@ -49,9 +52,9 @@ promptErrorReadingFile: .asciiz "\nError reading file, error code: "
 promptErrorFixingFilePath: .asciiz "\nError fixing file path"
 promptClosingFiles: .asciiz "\nClosing files..."
 
-chooseOperationPrompt:     .asciiz "\nChoose the operation (C for compression, D for decompression, Q to quit): "
-errorMsg:  .asciiz "\nInvalid choice. Please try again.\n"
-compressMsg: .asciiz "\nCompression function called.\n"
+chooseOperationPrompt:     .asciiz "\nChoose the operation (C for compression, D for decompression, Q to quit): \n> "
+invalidChoiceMsg:  .asciiz "\nInvalid choice. Please try again.\n"
+compressMsg: .asciiz "\nEnter path of text file to compress: \n> "
 decompressMsg: .asciiz "\nDecompression function called.\n"
 
 
@@ -72,8 +75,10 @@ decompressMsg: .asciiz "\nDecompression function called.\n"
 # No arguments
 RemoveNewline:
 
+    move $s5, $ra       # save return address in $s5
+
     # Remove newline character from the path
-    la $t0, buffer              # Load path address into $t0
+    la $t0, mainBuffer              # Load path address into $t0
     move $t1, $t0               # Point $t1 to the first character
 
     li $t4, '\n'
@@ -92,18 +97,85 @@ remove_newline:
     sb $zero, ($t1)       # Replace newline with null character
 
     # Return from the function
-    jr $ra
+    jr $s5
 
 # ############################### File Functions ##############################
 
 # Function
-# $a0 - First argument, $a1 - Second argument
-load_dictionary:
+# No arguments
+ReadCorrectFilePath:
 
-    nop
+    move $s6, $ra       # save return address in $s6
+
+    # Read the file path
+    li $v0, 8 # read string syscall
+    la $a0, mainBuffer # address of the string on a0
+    li $a1, BUFFER_SIZE_MINUS_ONE # max length of the string
+    syscall
+
+    jal RemoveNewline
 
     # Return from the function
-    jr $ra
+    jr $s6
+
+# Function ( returns file descriptor in $v1 )
+# $a0 : address of file path
+# $a1 : address of buffer to read in
+ReadFileIntoAddress:
+
+    move $s0, $a1       # move buffer address to $s0
+    move $s7, $ra       # save return address in $s7
+
+    # Open the file
+    li $v0, 13 # open file syscall
+    # $a0 : address of file path
+    li $a1, 0 # read only
+    li $a2, 0 # ignored in MARS simulator
+    syscall
+
+    li $t3, 0
+    bge		$v0, $t3, no_error_opening_file	# if $v0 >= 0 then no_error_opening_file
+    # Print: Error reading file
+    li $v0, 4 # print string syscall
+    la $a0, promptErrorReadingFile # address of the string on a0
+    syscall
+
+    j Quit
+
+    
+no_error_opening_file:
+
+    # store file descriptor in dictionaryReadFileDescriptor
+    sh $v0, inputFileDescriptor
+    move $v1, $v0 # store file descriptor in $v1 to return it
+    
+read_input_file:
+
+    move $t0, $s0       # move buffer address to $t0
+
+read_input_file_loop:
+
+    li $v0, 14                      # Read from file
+    lh $a0, inputFileDescriptor     # load file descriptor into $a0
+    move $a1, $t0                   # buffer address into $a1
+    li $a2, BUFFER_SIZE_MINUS_ONE   # Maximum number of characters to read
+    syscall
+
+    beqz $v0, exit_read_input_file_loop       # Exit loop if EOF is reached
+    
+    li $v0, 4                 # Print the block of text
+    move $a0, $t0             # block address into $a0
+    syscall
+    
+    move $t0, $s0   # Reset the buffer address
+    
+    j read_input_file_loop
+    
+exit_read_input_file_loop:
+
+    jr $s7
+
+
 
 # ############################## Menu Functions #############################
 
@@ -116,12 +188,12 @@ ShowMainMenu:
     
     # Read user input
     li $v0, 8
-    la $a0, buffer
-    li $a1, 4
+    la $a0, mainBuffer
+    li $a1, 2 # max length of the string
     syscall
     
     # Check user choice
-    lb $t0, buffer
+    lb $t0, mainBuffer
     
     # Convert choice to uppercase
     andi $t0, $t0, 0xDF
@@ -136,7 +208,7 @@ ShowMainMenu:
 incorrect_choice:
     # Print error message
     li $v0, 4
-    la $a0, errorMsg
+    la $a0, invalidChoiceMsg
     syscall
     
     j ShowMainMenu     # Restart the program
@@ -151,6 +223,12 @@ Compression:
     li $v0, 4 # print string syscall
     la $a0, compressMsg # address of the string on a0
     syscall
+
+    jal ReadCorrectFilePath # reads the file path into mainBuffer
+
+    la $a0, mainBuffer # address of file path
+    la $a1, secondaryBuffer # address of input buffer
+    jal ReadFileIntoAddress # reads the file into secondaryBuffer ( and prints it )
 
     # TODO: compression function
 
@@ -208,7 +286,7 @@ Main:
     # store file descriptor in dictionaryWriteFileDescriptor
     sh $v0, dictionaryWriteFileDescriptor
 
-    j exit_read_file_loop # jump to exit_read_file_loop to avoid reading the file
+    j dictionary_loaded # jump to exit_read_file_loop to avoid reading the file
 
 yes:
     # Print: Enter the file path:
@@ -216,63 +294,18 @@ yes:
     la $a0, promptFilePath # address of the string on a0
     syscall
 
-    # Read the file path
-    li $v0, 8 # read string syscall
-    la $a0, buffer # address of the string on a0
-    li $a1, BUFFER_SIZE_MINUS_ONE # max length of the string
-    syscall
+    jal ReadCorrectFilePath # reads the file path into mainBuffer
 
-    jal RemoveNewline
+load_dictionary:
 
-    j open_file
-
-reached_start_of_buffer:
-    # Print: promptErrorFixingFilePath
-    li $v0, 4 # print string syscall
-    la $a0, promptErrorFixingFilePath # address of the string on a0
-    syscall
-
-    j Quit
-
-open_file:
-
-    # Open the file
-    li $v0, 13 # open file syscall
-    la $a0, buffer # address of the string on a0
-    li $a1, 0 # read only
-    li $a2, 0 # ignored in MARS simulator
-    syscall
+    la $a0, mainBuffer # address of file path
+    la $a1, wordsArray # address of input buffer
+    jal ReadFileIntoAddress # reads the file into secondaryBuffer ( and prints it )
 
     # store file descriptor in dictionaryReadFileDescriptor
-    sh $v0, dictionaryReadFileDescriptor
+    sh $v1, dictionaryReadFileDescriptor
 
-read_file:
-
-    la $t0, wordsArray       # Load wordsArray address into $t0
-    la $t1, wordsArray       # Load array address into $t1
-    lw $t2, wordsCount       # Load wordsCount into $t2
-
-read_file_loop:
-
-    li $v0, 14                      # Read from file
-    lh $a0, dictionaryReadFileDescriptor # load file descriptor into $a0
-    move $a1, $t0                   # wordsArray address into $a1
-    li $a2, BUFFER_SIZE_MINUS_ONE   # Maximum number of characters to read
-    syscall
-
-    beqz $v0, exit_read_file_loop       # Exit loop if end-of-file is reached
-    
-    li $v0, 4                 # Print the block of text
-    move $a0, $t0             # block address into $a0
-    syscall
-    
-    la $t0, buffer            # Reset the buffer address
-    
-    j read_file_loop
-    
-exit_read_file_loop:
-
-    # TODO menu
+dictionary_loaded:
 
     jal ShowMainMenu
 
