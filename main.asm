@@ -49,10 +49,10 @@ promptErrorReadingFile: .asciiz "\nError reading file, error code: "
 promptErrorFixingFilePath: .asciiz "\nError fixing file path"
 promptClosingFiles: .asciiz "\nClosing files..."
 
-chooseOperationPrompt:     .asciiz "Choose the operation (C for compression, D for decompression, Q to quit): "
-errorMsg:  .asciiz "Invalid choice. Please try again.\n"
-compressMsg: .asciiz "Compression function called.\n"
-decompressMsg: .asciiz "Decompression function called.\n"
+chooseOperationPrompt:     .asciiz "\nChoose the operation (C for compression, D for decompression, Q to quit): "
+errorMsg:  .asciiz "\nInvalid choice. Please try again.\n"
+compressMsg: .asciiz "\nCompression function called.\n"
+decompressMsg: .asciiz "\nDecompression function called.\n"
 
 
 .text
@@ -99,7 +99,77 @@ remove_newline:
 # Function
 # $a0 - First argument, $a1 - Second argument
 load_dictionary:
+
     nop
+
+    # Return from the function
+    jr $ra
+
+# ############################## Menu Functions #############################
+
+# Function
+# No arguments
+ShowMainMenu:
+    li $v0, 4
+    la $a0, chooseOperationPrompt
+    syscall
+    
+    # Read user input
+    li $v0, 8
+    la $a0, buffer
+    li $a1, 4
+    syscall
+    
+    # Check user choice
+    lb $t0, buffer
+    
+    # Convert choice to uppercase
+    andi $t0, $t0, 0xDF
+    
+    # Branch based on user choice
+    beqz $t0, incorrect_choice     # Branch if choice is null
+    
+    beq $t0, 'C', Compression     # Branch if choice is 'C'
+    beq $t0, 'D', Decompression   # Branch if choice is 'D'
+    beq $t0, 'Q', Quit         # Branch if choice is 'Q'
+
+incorrect_choice:
+    # Print error message
+    li $v0, 4
+    la $a0, errorMsg
+    syscall
+    
+    j ShowMainMenu     # Restart the program
+
+# ############################## Main Functions #############################
+
+# Function
+# No arguments
+Compression:
+
+    # Print: compressMsg
+    li $v0, 4 # print string syscall
+    la $a0, compressMsg # address of the string on a0
+    syscall
+
+    # TODO: compression function
+
+    # end program
+    j Quit
+
+# Function
+# No arguments
+Decompression:
+
+    # Print: decompressMsg
+    li $v0, 4 # print string syscall
+    la $a0, decompressMsg # address of the string on a0
+    syscall
+
+    # TODO: decompression function
+
+    # end program
+    j Quit
 
 
 # #############################################################################
@@ -123,22 +193,22 @@ Main:
     lb $t1, smallBuffer
     beq $t0, $t1, yes
 
-    # create the file
+    # create the file since the answer is no
     li $v0, 4 # print string syscall
     la $a0, promptCreatingFile # address of the string on a0
     syscall
 
-    # # creates dictionary.txt if it doesn't exist
-    # li $v0, 13 # create file syscall
-    # la $a0, defaultFileName # address of the string on a0
-    # li $a1, 1 # write only
-    # li $a2, 0 # ignored in MARS simulator
-    # syscall
+    # creates dictionary.txt if it doesn't exist
+    li $v0, 13 # create file syscall
+    la $a0, defaultFileName # address of the string on a0
+    li $a1, 1 # write only
+    li $a2, 0 # ignored in MARS simulator
+    syscall
 
-    # # store file descriptor in dictionaryWriteFileDescriptor
-    # sh $v0, dictionaryWriteFileDescriptor
+    # store file descriptor in dictionaryWriteFileDescriptor
+    sh $v0, dictionaryWriteFileDescriptor
 
-    j open_file
+    j exit_read_file_loop # jump to exit_read_file_loop to avoid reading the file
 
 yes:
     # Print: Enter the file path:
@@ -162,7 +232,7 @@ reached_start_of_buffer:
     la $a0, promptErrorFixingFilePath # address of the string on a0
     syscall
 
-    j quit
+    j Quit
 
 open_file:
 
@@ -204,8 +274,10 @@ exit_read_file_loop:
 
     # TODO menu
 
+    jal ShowMainMenu
 
-quit:    
+
+Quit:    
 
     # Print: Quitting...
     li $v0, 4 # print string syscall
