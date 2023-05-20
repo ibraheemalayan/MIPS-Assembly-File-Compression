@@ -1,89 +1,69 @@
-# Pseudocode for the MIPS assembly program
 
-# Define data structures
-dictionary: array of structures (code, word)
-compressed_data: array to store compressed binary codes
 
-# Define variables
-dictionary_size: number of entries in the dictionary
-compression_ratio: ratio of uncompressed to compressed file size
 
-# Load dictionary from file
-load_dictionary:
-    # Ask user for the path of dictionary.txt
-    # Read the path from user input
 
-    # Open the file for reading
-    # Read the dictionary entries from the file into the dictionary array
-    # Update the dictionary_size variable
+show menu, get compress file option , read file path, read file, 
 
-# Compress the file
-compress_file:
-    # Ask user for the path of the file to be compressed
-    # Read the path from user input
+word = ""
 
-    # Open the file for reading
-    # Read the file character by character
-    # For each character:
-        # Search for the character in the dictionary array
-        # If found, append the corresponding code to the compressed_data array
-        # If not found, append the character to the dictionary array with a new code
-        # Append the new code to the compressed_data array
+for each char in buffer 
 
-    # Compute the compression ratio
-    # Calculate uncompressed file size
-    # Calculate compressed file size
-    # Divide uncompressed file size by compressed file size to get compression ratio
 
-    # Write the compressed_data array to the compressed file
-
-    # Update the dictionary in the dictionary file with new entries
-
-# Decompress the file
-decompress_file:
-    # Ask user for the path of the file to be decompressed
-    # Read the path from user input
-
-    # Open the file for reading
-    # Read the file binary codes from the file into the compressed_data array
-
-    # For each code in the compressed_data array:
-        # Search for the code in the dictionary array
-        # If found, append the corresponding word to the uncompressed file
-        # If not found, display an appropriate error message
-
-# Save changes to the dictionary
-save_dictionary:
-    # Open the dictionary file for writing
-    # Write the dictionary entries from the dictionary array to the file
-    # Close the file
-
-# Main program loop
-main_loop:
-    # Display program menu options to the user
-    # Get user input for the chosen option
+    if char is not alphabetic
+        word = char
+    else
+        word.add char
+        j loop start
+    end
     
-    # If option is "load dictionary"
-        # Call load_dictionary function
+    // check if word in ditionary
+
+    if yes 
+        word = ""
+        j loop start
+        
+    else
+        append word to dictionary and append us
+        word = ""
+        j loop start
+
+///////////  
+
+
+write MIPS MARS assembly function called "get_word_index_from_dictionary", it takes the following parameters:
+$a0 : pointer to the word to be checked
+$a1 : pointer to the dictionary
+
+the dictionary is a string of characters that is delimited by the character 'us' (ASCII unit separator) and the last word is delimited by the character '\0' (null character)
+the function returns the index of the word in the dictionary if it exists, otherwise it returns -1
+
+```
+    word = passed_word
+    match = false
+
+    i = 0
+
+    for char in dictionary
+        if char == word[i] && word[i] != '\0'
+            match = true
+            i++
+            continue
+        else if word[i] == '\0'
+            if char == 'us'
+                return true
+            else
+                i = 0
+                continue
+
+        else if char == 'us'
+
+            if match == false
+                i = 0
+                continue
+            else
+                return true
+            end
+        end
     
-    # If option is "compress"
-        # Call compress_file function
-
-    # If option is "decompress"
-        # Call decompress_file function
-
-    # If option is "quit"
-        # Break the loop and exit the program
-
-    # If option is invalid
-        # Display appropriate error message
-
-    # Go back to the main loop
-
-# Entry point of the program
-main:
-    # Initialize data structures and variables
-    
-    # Call the main_loop function
-
-# End of program
+        return false
+```
