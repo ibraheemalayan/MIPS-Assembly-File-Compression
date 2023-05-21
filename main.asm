@@ -173,6 +173,7 @@ read_input_file_loop:
     
 exit_read_input_file_loop:
 
+    # return from the function
     jr $s7
 
 
@@ -214,6 +215,67 @@ incorrect_choice:
     j ShowMainMenu     # Restart the program
 
 # ############################## Main Functions #############################
+
+# Function ( returns word index in $v0, or -1 if not found )
+# $a0 : address of word to search for
+# uses t4, t5, t6, t7, t8, t9, s0
+FindWordInDictionary:
+
+    move $t5, $a0       # move word address to $t5
+    la $t6, wordsArray  # load dictionary address into $t6
+    
+    li $t7, 0           # initialize word index to 0
+    li $t8, 0           # initialize character index to 0
+
+    li $s0, '~'         # initialize $s0 to '~' ( delimiter )
+
+find_word_in_dictionary_loop:
+
+    lb $t9, ($t5)       # load character from word into $t9
+    lb $t4, ($t6)       # load character from dictionary into $t4
+
+    # if t9 != t4 then go to next word by looping over dictionary chatacters until $s0 is found
+    bne $t9, $t4, next_dictionary_character
+
+
+
+
+
+next_dictionary_character:
+    addi $t6, $t6, 1
+
+
+
+
+# character_match:
+    
+#     beqz $t9, word_found    # if $t9 == 0 then word_found
+
+#     # if $t4 == $s0 == '~' then word_not_found
+#     beq $t4, $s0, word_not_found
+    
+    
+#     bne $t9, $t4, word_not_found   # if $t9 != $t10 then word_not_found
+    
+#     addi $t5, $t5, 1    # increment word address
+#     addi $t6, $t6, 1    # increment dictionary address
+#     addi $t8, $t8, 1    # increment character index
+#     j find_word_in_dictionary_loop
+
+
+
+
+# Function
+# No arguments
+CompressBuffer:
+
+    la $t0, secondaryBuffer # address of buffer containing the text to compress
+    la $t1, wordsArray # address of dictionary
+
+
+
+
+# ############################### Menu Options ##############################
 
 # Function
 # No arguments

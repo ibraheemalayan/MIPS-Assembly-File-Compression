@@ -1,7 +1,3 @@
-
-
-
-
 show menu, get compress file option , read file path, read file, 
 
 word = ""
@@ -26,44 +22,3 @@ for each char in buffer
         append word to dictionary and append us
         word = ""
         j loop start
-
-///////////  
-
-
-write MIPS MARS assembly function called "get_word_index_from_dictionary", it takes the following parameters:
-$a0 : pointer to the word to be checked
-$a1 : pointer to the dictionary
-
-the dictionary is a string of characters that is delimited by the character 'us' (ASCII unit separator) and the last word is delimited by the character '\0' (null character)
-the function returns the index of the word in the dictionary if it exists, otherwise it returns -1
-
-```
-    word = passed_word
-    match = false
-
-    i = 0
-
-    for char in dictionary
-        if char == word[i] && word[i] != '\0'
-            match = true
-            i++
-            continue
-        else if word[i] == '\0'
-            if char == 'us'
-                return true
-            else
-                i = 0
-                continue
-
-        else if char == 'us'
-
-            if match == false
-                i = 0
-                continue
-            else
-                return true
-            end
-        end
-    
-        return false
-```
