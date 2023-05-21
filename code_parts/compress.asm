@@ -7,9 +7,16 @@
     sep: .asciiz "~"       # Separator character
     wordsArray: .asciiz "text~ ~Nigga~a~:~\n~Hello~.~studying~:~you"   # Assuming "wordsArray" is defined in the .data section
     empty: .space 100
+    compressedSizePrompt: .asciiz "\nCompressed file size: "
+    uncompressedSizePrompt: .asciiz "\nUncompressed file size: "
+    compressionRatioPrompt: .asciiz "\nCompression Ratio: "
 .text
+.glob main 
 
 main:
+
+    # s3 contains number of tokens compressed
+    li $s3, 0
 
     # Call tokeniz_text function
     la $a0, text
@@ -22,6 +29,8 @@ main:
 # Function ( returns index in v0 )
 # $a0 = word address
 FindWordInwordsArray:
+
+    addi $s3, $s3, 1 # increment number of compressed tokens
 
     li $t0, 0       # i = 0
     li $t1, 0       # j = 0
@@ -266,11 +275,6 @@ character_is_not_alpha:
 
 token_start_index_is_not_set:
 
-
-    # if (currentChar == '\n') j next_iteration
-    beq $s2, '\n', next_iteration
-
-    # else
     sb $s2, word($zero) # word[0] = currentChar
     li $t8, 1
     sb $zero, word($t8) # word[1] = '\0'
@@ -294,4 +298,52 @@ tokenize_text_end_loop:
     jal FindWordInwordsArray
 
 end_tokeniz_text:
+
+    # s0 contains chars of uncompressed file
+    # s3 contains chars of compressed file
+
+    # Print uncompressedSizePrompt
+    la $a0, uncompressedSizePrompt
+    li $v0, 4
+    syscall
+
+    # Print integer stored in $s0
+    move $a0, $s0
+    li $v0, 1
+    syscall
+
+    # Print compressedSizePrompt
+    la $a0, compressedSizePrompt
+    li $v0, 4
+    syscall
+
+    # Print integer stored in $s3
+    move $a0, $s3
+    li $v0, 1
+    syscall
+
+    # Print compressionRatioPrompt
+    la $a0, compressionRatioPrompt
+    li $v0, 4
+    syscall
+
+    mtc1 $s0, $f10
+    cvt.s.w $f10, $f10
+
+    mtc1 $s3, $f11
+    cvt.s.w $f11, $f11
+
+    # Calculate compression ratio
+    div.s $f12, $f10, $f11
+
+    # Print float stored in $f12
+    li $v0, 2
+    syscall
+
+    # print words array
+    la $a0, wordsArray
+    li $v0, 4
+    syscall
+
+
     jr $s5    # Return to the caller
