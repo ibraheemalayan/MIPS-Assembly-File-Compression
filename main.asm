@@ -42,7 +42,9 @@ word: .space 128
 # #############################################################################
 
 # default file name 
-defaultFileName: .asciiz "dictionary.txt"
+defaultDictionaryName: .asciiz "dictionary.txt"
+defaultCompressedOutputName: .asciiz "compressed.bin"
+defaultDecompressedOutputName: .asciiz "decompressed.txt"
 
 # prompts
 promptFileExists: .asciiz "\ndoes the dictionary.txt file exist ? [yes/no]\n> "
@@ -50,11 +52,13 @@ promptFilePath: .asciiz "\nEnter the file path: \n> "
 promptCreatingFile: .asciiz "\nOk, creating the file..."
 promptQuitting: .asciiz "\nQuitting..."
 promptErrorReadingFile: .asciiz "\nError reading file, error code: "
+promptErrorWritingFile: .asciiz "\nError writing to file, error code: "
 promptErrorFixingFilePath: .asciiz "\nError fixing file path"
 promptClosingFiles: .asciiz "\nClosing files..."
 compressedSizePrompt: .asciiz "\nCompressed file size: "
 uncompressedSizePrompt: .asciiz "\nUncompressed file size: "
 compressionRatioPrompt: .asciiz "\nCompression Ratio: "
+dictionaryUpdatedPrompt: .asciiz "\nDictionary updated.\n"
 chooseOperationPrompt:     .asciiz "\nChoose the operation (C for compression, D for decompression, Q to quit): \n> "
 invalidChoiceMsg:  .asciiz "\nInvalid choice. Please try again.\n"
 compressMsg: .asciiz "\nEnter path of text file to compress: \n> "
@@ -139,6 +143,8 @@ ReadFileIntoAddress:
 
     li $t3, 0
     bge		$v0, $t3, no_error_opening_file	# if $v0 >= 0 then no_error_opening_file
+    
+error_reading_file:
     # Print: Error reading file
     li $v0, 4 # print string syscall
     la $a0, promptErrorReadingFile # address of the string on a0
@@ -146,6 +152,22 @@ ReadFileIntoAddress:
 
     j Quit
 
+error_writing_file:
+
+    move $a1, $v0 # move error code to $a0
+
+    # Print: Error writing to file
+    li $v0, 4 # print string syscall
+    la $a0, promptErrorWritingFile # address of the string on a0
+    syscall
+
+    # Print error code
+    move $a0, $a1
+    li $v0, 1 # print integer syscall
+    syscall
+
+
+    j Quit
     
 no_error_opening_file:
 
@@ -166,10 +188,6 @@ read_input_file_loop:
     syscall
 
     beqz $v0, exit_read_input_file_loop       # Exit loop if EOF is reached
-    
-    li $v0, 4                 # Print the block of text
-    move $a0, $t0             # block address into $a0
-    syscall
     
     move $t0, $s0   # Reset the buffer address
     
@@ -220,9 +238,36 @@ incorrect_choice:
 
 # ############################## Main Functions #############################
 
+# Function
+# $a1 = code ( short integer )
+WriteWordCodeToOutput:
+
+   
+    # code already in $a1
+    li $t7, 0
+
+    sb $a1, smallBuffer($t7) # store code at the start of smallBuffer
+
+    li $a1, 0
+    li $t7, 2
+    sb $a1, smallBuffer($t7) # store a null terminator after the code in the smallBuffer
+
+    la $a1, smallBuffer # address of the string on a1
+
+    # Write the code to the output file
+    li $v0, 15 # write to file syscall
+    lh $a0, outputFileDescriptor # load file descriptor into $a0
+    li $a2, 2 # number of bytes to write
+    syscall
+
+    # Return from the function
+    jr $ra
+
 # Function ( returns index in v0 )
 # $a0 = word address
-FindWordInwordsArray:
+CompressWord:
+
+    move $s4, $ra       # save return address in $s4
 
     addi $s3, $s3, 1 # increment number of compressed tokens
 
@@ -379,18 +424,22 @@ append_loop:
 
 return_index:
 
-    move $v1, $t2       # Move return value to $v0
+    move $v1, $t2       # Move return value to $v1
     
     # print index just for debugging
-    move $a0, $v1        # Move return value to $a0
-    li $v0, 1           # Print return value
-    syscall
+    # move $a0, $v1        # Move return value to $a0
+    # li $v0, 1           # Print return value
+    # syscall
 
-    la $a0, sep         # Move return value to $a0
-    li $v0, 4           # Print return value
-    syscall
+    # la $a0, sep         # Move return value to $a0
+    # li $v0, 4           # Print return value
+    # syscall
 
-    jr $ra
+    # append code to output file
+    move $a1, $v1        # Move return value to $a0
+    jal WriteWordCodeToOutput
+
+    jr $s4
 
 # Function
 # args: $a3 - input
@@ -417,7 +466,18 @@ return_0:
 
 # Function
 # args: No args
-TokenizeText:
+TokenizeTextAndCompress:
+
+
+    # Create output file
+    la $a0, defaultCompressedOutputName
+    li $a1, 1 # write-only with create
+    li $a2, 0
+    li $v0, 13
+    syscall
+
+    # store file descriptor
+    sh $v0, outputFileDescriptor
 
     move $s5, $ra
     
@@ -462,7 +522,7 @@ character_is_not_alpha:
     # handle_word(&text[tokenStartIndex]); # TODO
     la $a0, secondaryBuffer
     add $a0 , $a0, $s1
-    jal FindWordInwordsArray
+    jal CompressWord
 
     li $s1, -1 # tokenStartIndex = -1;
 
@@ -475,7 +535,7 @@ token_start_index_is_not_set:
 
     # handle_word(&word); # TODO
     la $a0, word
-    jal FindWordInwordsArray
+    jal CompressWord
 
 next_iteration:
     addi $s0, $s0, 1 # textIndex++
@@ -489,7 +549,7 @@ tokenize_text_end_loop:
     # handle_word(&text[tokenStartIndex]); # TODO
     la $a0, secondaryBuffer
     add $a0 , $a0, $s1
-    jal FindWordInwordsArray
+    jal CompressWord
 
 end_tokeniz_text:
 
@@ -534,10 +594,38 @@ end_tokeniz_text:
     li $v0, 2
     syscall
 
-    # print words array
-    la $a0, wordsArray
+    # ######## update dictionary ########
+
+    
+    # count characters of wordsArray until null
+    li $t1, 0 # int i = 0;
+loop_count_wordsArray:
+    lb $t0, wordsArray($t1) # char currentChar = wordsArray[i];
+    li $t8, 0
+    beq $t0, $t8, break_loop_count_wordsArray # if (currentChar == '\0') break;
+    addi $t1, $t1, 1 # i++
+    j loop_count_wordsArray
+ 
+
+break_loop_count_wordsArray:
+
+    lh $a0, dictionaryWriteFileDescriptor # store file descriptor
+
+    # Write the code to the output file
+    li $v0, 15 # write to file syscall
+    la $a1, wordsArray # address of the dictionary
+    move $a2, $t1 # number of bytes to write
+    syscall
+
+     # print update dictionary prompt
+    la $a0, dictionaryUpdatedPrompt
     li $v0, 4
     syscall
+
+    # # print dictionary for debug
+    # la $a0, wordsArray
+    # li $v0, 4
+    # syscall
 
 
     jr $s5    # Return to the caller
@@ -565,15 +653,11 @@ Compression:
 
     # Call tokeniz_text function
     la $a0, secondaryBuffer
-    jal TokenizeText
+    jal TokenizeTextAndCompress
 
     # Exit program
     li $v0, 10
     syscall
-
-
-    
-    # TODO: compression function
 
     # end program
     j Quit
@@ -621,7 +705,7 @@ Main:
 
     # creates dictionary.txt if it doesn't exist
     li $v0, 13 # create file syscall
-    la $a0, defaultFileName # address of the string on a0
+    la $a0, defaultDictionaryName # address of the string on a0
     li $a1, 1 # write only
     li $a2, 0 # ignored in MARS simulator
     syscall
@@ -647,6 +731,22 @@ load_dictionary:
 
     # store file descriptor in dictionaryReadFileDescriptor
     sh $v1, dictionaryReadFileDescriptor
+
+    # close the read file descriptors if open
+    lh $t0, dictionaryReadFileDescriptor
+    beqz $t0, dictionary_loaded
+    li $v0, 16 # close file syscall
+    lh $a0, dictionaryReadFileDescriptor
+    syscall
+
+    # open dictionary file for write
+    la $a0, mainBuffer # address of file path
+    li $a1, 1 # write-only with create
+    li $a2, 0
+    li $v0, 13
+    syscall
+
+    sh $v0, dictionaryWriteFileDescriptor # store file descriptor
 
 dictionary_loaded:
 
@@ -675,9 +775,16 @@ Quit:
 
 close_write_file:
     lh $t0, dictionaryWriteFileDescriptor
-    beqz $t0, files_closed
+    beqz $t0, close_output_write_file
     li $v0, 16 # close file syscall
     lh $a0, dictionaryWriteFileDescriptor
+    syscall
+
+close_output_write_file:
+    lh $t0, outputFileDescriptor
+    beqz $t0, files_closed
+    li $v0, 16 # close file syscall
+    lh $a0, outputFileDescriptor
     syscall
 
 files_closed:
