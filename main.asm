@@ -242,15 +242,14 @@ incorrect_choice:
 # $a1 = code ( short integer )
 WriteWordCodeToOutput:
 
-   
     # code already in $a1
     li $t7, 0
 
-    sb $a1, smallBuffer($t7) # store code at the start of smallBuffer
+    sh $a1, smallBuffer($t7) # store code at the start of smallBuffer
 
     li $a1, 0
     li $t7, 2
-    sb $a1, smallBuffer($t7) # store a null terminator after the code in the smallBuffer
+    sh $a1, smallBuffer($t7) # store a null terminator after the code in the smallBuffer
 
     la $a1, smallBuffer # address of the string on a1
 
