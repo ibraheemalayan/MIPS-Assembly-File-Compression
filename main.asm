@@ -62,7 +62,8 @@ chooseOperationPrompt:     .asciiz "\nChoose the operation (C for compression, D
 invalidChoiceMsg:  .asciiz "\nInvalid choice. Please try again.\n"
 compressMsg: .asciiz "\nEnter path of text file to compress: \n> "
 decompressMsg: .asciiz "\nEnter path of binary file to decompress: \n> "
-savingDecompressedDataMsg: .asciiz "\nSaving decompressed data in decompressed.txt...\n"
+savingDecompressedDataMsg: .asciiz "\nSaving decompressed data in decompressed.txt ...\n"
+savingCompressedDataMsg: .asciiz "\nSaving compressed data in compressed.bin ...\n"
 code_not_found: .asciiz "\nAn unknown code was found in the compressed file. Please check the file and try again.\n"
 sep: .asciiz "~"
 
@@ -569,6 +570,10 @@ return_index:
 # args: No args
 TokenizeTextAndCompress:
 
+    # print savingCompressedDataMsg
+    la $a0, savingCompressedDataMsg
+    li $v0, 4
+    syscall
 
     # Create output file
     la $a0, defaultCompressedOutputName
