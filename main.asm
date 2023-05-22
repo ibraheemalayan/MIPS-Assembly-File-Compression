@@ -27,7 +27,6 @@
 
 .data
 smallBuffer: .space 32    # Space to buffer small strings
-wordsCount: .word 0 # number of words in the dictionary
 inputFileDescriptor: .space 2 # descriptor is 2 bytes long ( half word )
 outputFileDescriptor: .space 2 # descriptor is 2 bytes long ( half word )
 dictionaryReadFileDescriptor: .space 2 # descriptor is 2 bytes long ( half word )
@@ -51,8 +50,8 @@ promptFileExists: .asciiz "\ndoes the dictionary.txt file exist ? [yes/no]\n> "
 promptFilePath: .asciiz "\nEnter the file path: \n> "
 promptCreatingFile: .asciiz "\nOk, creating the file..."
 promptQuitting: .asciiz "\nQuitting..."
-promptErrorReadingFile: .asciiz "\nError reading file, error code: "
-promptErrorWritingFile: .asciiz "\nError writing to file, error code: "
+promptErrorReadingFile: .asciiz "\nError reading file. "
+promptErrorWritingFile: .asciiz "\nError writing to file. "
 promptErrorFixingFilePath: .asciiz "\nError fixing file path"
 promptClosingFiles: .asciiz "\nClosing files..."
 compressedSizePrompt: .asciiz "\nCompressed file size: "
@@ -62,7 +61,9 @@ dictionaryUpdatedPrompt: .asciiz "\nDictionary updated.\n"
 chooseOperationPrompt:     .asciiz "\nChoose the operation (C for compression, D for decompression, Q to quit): \n> "
 invalidChoiceMsg:  .asciiz "\nInvalid choice. Please try again.\n"
 compressMsg: .asciiz "\nEnter path of text file to compress: \n> "
-decompressMsg: .asciiz "\nDecompression function called.\n"
+decompressMsg: .asciiz "\nEnter path of binary file to decompress: \n> "
+savingDecompressedDataMsg: .asciiz "\nSaving decompressed data in decompressed.txt...\n"
+code_not_found: .asciiz "\nAn unknown code was found in the compressed file. Please check the file and try again.\n"
 sep: .asciiz "~"
 
 
@@ -77,6 +78,30 @@ sep: .asciiz "~"
 
 
 # ############################## String Functions #############################
+
+
+# Function
+# args: $a3 - input
+IsCharAlpha:
+
+    # Convert choice to uppercase
+    andi $a3, $a3, 0xDF
+
+    # if (input >= 'A' && input <= 'Z') return 1;
+    # eqv to
+    # if (input < 'A' || input > 'Z') return 0;
+    li $t8, 'A'
+    li $t9, 'Z'
+    bgt $a3, $t9, return_0
+    blt $a3, $t8, return_0
+
+    li $v0, 1
+    jr $ra
+
+return_0:
+    li $v0, 0
+    jr $ra
+
 
 
 # Function
@@ -198,7 +223,29 @@ exit_read_input_file_loop:
     # return from the function
     jr $s7
 
+# Function
+# $a1 = code ( short integer )
+WriteWordCodeToOutput:
 
+    # code already in $a1
+    li $t7, 0
+
+    sh $a1, smallBuffer($t7) # store code at the start of smallBuffer
+
+    li $a1, 0
+    li $t7, 2
+    sh $a1, smallBuffer($t7) # store a null terminator after the code in the smallBuffer
+
+    la $a1, smallBuffer # address of the string on a1
+
+    # Write the code to the output file
+    li $v0, 15 # write to file syscall
+    lh $a0, outputFileDescriptor # load file descriptor into $a0
+    li $a2, 2 # number of bytes to write
+    syscall
+
+    # Return from the function
+    jr $ra
 
 # ############################## Menu Functions #############################
 
@@ -239,28 +286,106 @@ incorrect_choice:
 # ############################## Main Functions #############################
 
 # Function
-# $a1 = code ( short integer )
-WriteWordCodeToOutput:
+# substitute words into the decompressed text buffer
+# $a0 : code ( short integer ) to get from dictionary
+# $s0 : j - current index in decompressed text buffer (where to write the word)
+SubstituteWordFromDictionary:
 
-    # code already in $a1
-    li $t7, 0
+    # loop over wordsArray and count SEPARATORs until count == code, then return the word by copying it to the buffer
+    
+    li $t0, 0       # i = 0
+    li $t1, 0       # current_word_index = 0
+    
 
-    sh $a1, smallBuffer($t7) # store code at the start of smallBuffer
+substitute_while_loop:
 
-    li $a1, 0
-    li $t7, 2
-    sh $a1, smallBuffer($t7) # store a null terminator after the code in the smallBuffer
+    lb $t4, wordsArray($t0)     # dict_char = wordsArray[i]
+    addi $t0, $t0, 1            # i++
 
-    la $a1, smallBuffer # address of the string on a1
+    # if (dict_char == "~" or dict_char == "\0") and current_word_index == code
+    # return
 
-    # Write the code to the output file
-    li $v0, 15 # write to file syscall
-    lh $a0, outputFileDescriptor # load file descriptor into $a0
-    li $a2, 2 # number of bytes to write
+    bne $t1, $a0, check_end_of_dictionary # if current_word_index != code then check_end_of_dictionary
+    beq $t4, '~', return_from_substitute_word # if current_word_index == code && dict_char == "~" then return_from_substitute_word
+    beq $t4, '\0', return_from_substitute_word # if current_word_index == code && dict_char == "\0" then return_from_substitute_word
+    
+check_end_of_dictionary:
+
+    beq $t4, '\0', error_code_not_found
+
+    # if dict_char == "~" and current_word_index != code: current_word_index++ and continue
+    
+    # if dict_char != "~": not_end_of_word
+    # or 
+    # if current_word_index == code: not_end_of_word
+
+    bne $t4, '~', not_end_of_word
+    beq $t1, $a0, not_end_of_word
+
+    # else
+    addi $t1, $t1, 1 # current_word_index++
+    j substitute_while_loop # continue
+
+not_end_of_word:
+
+    # if current_word_index != code: continue
+    bne $t1, $a0, substitute_while_loop
+
+    # else
+    
+    # copy character to buffer
+    sb $t4, mainBuffer($s0) # mainBuffer[j] = dict_char
+    addi $s0, $s0, 1 # j += 1
+    j substitute_while_loop # continue
+
+error_code_not_found:
+
+    # Print: Error code not found
+    li $v0, 4 # print string syscall
+    la $a0, code_not_found # address of the string on a0
     syscall
 
-    # Return from the function
+    j Quit
+
+
+return_from_substitute_word:
+    # return from the function
     jr $ra
+
+
+# Function
+# binary compressed data should be in secondaryBuffer
+# decompressed output text data will be saved in mainBuffer
+SubstitueCodes:
+
+    # save return address in $s7
+    move $s7, $ra
+
+    # init j = 0 ( index in mainBuffer/decompressed data )
+    li $s0, 0
+
+    # init i = 0 ( index in secondaryBuffer/compressed data )
+    li $s1, 0
+
+substitute_codes_loop:
+
+    # get code from secondaryBuffer ( 2 bytes )
+    lh $a0, secondaryBuffer($s1)
+
+    # increment i by 2
+    addi $s1, $s1, 2
+
+    # if code == 0 then return
+    beqz $a0, exit_substitute_codes_loop
+
+    jal SubstituteWordFromDictionary
+
+    j substitute_codes_loop
+
+exit_substitute_codes_loop:
+
+    jr $s7
+
 
 # Function ( returns index in v0 )
 # $a0 = word address
@@ -441,29 +566,6 @@ return_index:
     jr $s4
 
 # Function
-# args: $a3 - input
-IsCharAlpha:
-
-    # Convert choice to uppercase
-    andi $a3, $a3, 0xDF
-
-    # if (input >= 'A' && input <= 'Z') return 1;
-    # eqv to
-    # if (input < 'A' || input > 'Z') return 0;
-    li $t8, 'A'
-    li $t9, 'Z'
-    bgt $a3, $t9, return_0
-    blt $a3, $t8, return_0
-
-    li $v0, 1
-    jr $ra
-
-return_0:
-    li $v0, 0
-    jr $ra
-
-
-# Function
 # args: No args
 TokenizeTextAndCompress:
 
@@ -518,7 +620,7 @@ character_is_not_alpha:
     # else
     sb $zero, secondaryBuffer($s0) # text[textIndex] = '\0'
 
-    # handle_word(&text[tokenStartIndex]); # TODO
+    # handle_word(&text[tokenStartIndex]);
     la $a0, secondaryBuffer
     add $a0 , $a0, $s1
     jal CompressWord
@@ -532,7 +634,7 @@ token_start_index_is_not_set:
     li $t8, 1
     sb $zero, word($t8) # word[1] = '\0'
 
-    # handle_word(&word); # TODO
+    # handle_word(&word);
     la $a0, word
     jal CompressWord
 
@@ -545,7 +647,7 @@ tokenize_text_end_loop:
     li $t8, -1
     beq $s1, $t8, end_tokeniz_text # if (tokenStartIndex == -1) return
 
-    # handle_word(&text[tokenStartIndex]); # TODO
+    # handle_word(&text[tokenStartIndex]);
     la $a0, secondaryBuffer
     add $a0 , $a0, $s1
     jal CompressWord
@@ -593,34 +695,6 @@ end_tokeniz_text:
     li $v0, 2
     syscall
 
-    # ######## update dictionary ########
-
-    
-    # count characters of wordsArray until null
-    li $t1, 0 # int i = 0;
-loop_count_wordsArray:
-    lb $t0, wordsArray($t1) # char currentChar = wordsArray[i];
-    li $t8, 0
-    beq $t0, $t8, break_loop_count_wordsArray # if (currentChar == '\0') break;
-    addi $t1, $t1, 1 # i++
-    j loop_count_wordsArray
- 
-
-break_loop_count_wordsArray:
-
-    lh $a0, dictionaryWriteFileDescriptor # store file descriptor
-
-    # Write the code to the output file
-    li $v0, 15 # write to file syscall
-    la $a1, wordsArray # address of the dictionary
-    move $a2, $t1 # number of bytes to write
-    syscall
-
-     # print update dictionary prompt
-    la $a0, dictionaryUpdatedPrompt
-    li $v0, 4
-    syscall
-
     # # print dictionary for debug
     # la $a0, wordsArray
     # li $v0, 4
@@ -629,8 +703,9 @@ break_loop_count_wordsArray:
 
     jr $s5    # Return to the caller
 
-
-# ############################### Menu Options ##############################
+# #############################################################################
+# ################################ Menu Options ###############################
+# #############################################################################
 
 # Function
 # No arguments
@@ -654,10 +729,6 @@ Compression:
     la $a0, secondaryBuffer
     jal TokenizeTextAndCompress
 
-    # Exit program
-    li $v0, 10
-    syscall
-
     # end program
     j Quit
 
@@ -670,8 +741,39 @@ Decompression:
     la $a0, decompressMsg # address of the string on a0
     syscall
 
-    # TODO: decompression function
+    jal ReadCorrectFilePath # reads the file path into mainBuffer
 
+    la $a0, mainBuffer # address of file path
+    la $a1, secondaryBuffer # address of input buffer
+    jal ReadFileIntoAddress # reads the file into secondaryBuffer ( and prints it )
+
+    # Call substitue function
+    la $a0, secondaryBuffer
+    jal SubstitueCodes
+
+    # decompressed data is now in mainBuffer
+
+    # print decompressed data
+    la $a0, savingDecompressedDataMsg
+    li $v0, 4
+    syscall
+
+    # open file defaultDecompressedOutputName for writing
+    la $a0, defaultDecompressedOutputName
+    li $a1, 1 # write mode
+    li $a2, 0 # default permissions
+    li $v0, 13 # open file syscall
+    syscall
+
+    # save file descriptor in $a0
+    move $a0, $v0
+
+    # write main buffer ($s0 characters) to file 
+    la $a1, mainBuffer
+    move $a2, $s0 # write $s0 characters
+    li $v0, 15 # write file syscall
+    syscall
+    
     # end program
     j Quit
 
@@ -731,12 +833,12 @@ load_dictionary:
     # store file descriptor in dictionaryReadFileDescriptor
     sh $v1, dictionaryReadFileDescriptor
 
-    # close the read file descriptors if open
-    lh $t0, dictionaryReadFileDescriptor
-    beqz $t0, dictionary_loaded
+    # close the read file descriptors
     li $v0, 16 # close file syscall
     lh $a0, dictionaryReadFileDescriptor
     syscall
+
+    sh $zero, dictionaryReadFileDescriptor
 
     # open dictionary file for write
     la $a0, mainBuffer # address of file path
@@ -775,6 +877,34 @@ Quit:
 close_write_file:
     lh $t0, dictionaryWriteFileDescriptor
     beqz $t0, close_output_write_file
+
+    # ######## update dictionary ########
+    
+    # count characters of wordsArray until null
+    li $t1, 0 # int i = 0;
+loop_count_wordsArray:
+    lb $t0, wordsArray($t1) # char currentChar = wordsArray[i];
+    li $t8, 0
+    beq $t0, $t8, break_loop_count_wordsArray # if (currentChar == '\0') break;
+    addi $t1, $t1, 1 # i++
+    j loop_count_wordsArray
+ 
+
+break_loop_count_wordsArray:
+
+     # print update dictionary prompt
+    la $a0, dictionaryUpdatedPrompt
+    li $v0, 4
+    syscall
+
+    lh $a0, dictionaryWriteFileDescriptor # load file descriptor
+
+    # Write the dictionary to the output file
+    li $v0, 15 # write to file syscall
+    la $a1, wordsArray # address of the dictionary
+    move $a2, $t1 # number of bytes to write
+    syscall
+
     li $v0, 16 # close file syscall
     lh $a0, dictionaryWriteFileDescriptor
     syscall
