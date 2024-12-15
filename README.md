@@ -1,5 +1,9 @@
 # MIPS Assembly File Compression
 
+## Code
+
+[main.asm](./main.asm)
+
 ## Description
 
 A MIPS assembly program that compresses/decompresses a file using dictionary-based compression.
